@@ -12,8 +12,68 @@ from services.graph import create_room_node
 from services.audit import audit
 from services.llm import AVAILABLE_MODELS
 
+import httpx
+import time as _time
+
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 
+_models_cache = {"data": None, "fetched_at": 0}
+
+@router.get("/models/live")
+async def get_live_models(user: dict = Depends(get_current_user)):
+    """Fetch available models from OpenRouter with 24hr cache."""
+    now = _time.time()
+    if _models_cache["data"] and (now - _models_cache["fetched_at"]) < 86400:
+        return _models_cache["data"]
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.get("https://openrouter.ai/api/v1/models")
+            if res.status_code != 200:
+                raise Exception(f"OpenRouter returned {res.status_code}")
+            all_models = res.json().get("data", [])
+
+        # Filter to models we support
+        supported_prefixes = [
+            "anthropic/claude-sonnet-4",
+            "anthropic/claude-3.5-haiku",
+            "anthropic/claude-3.5-sonnet",
+            "anthropic/claude-3.7-sonnet",
+            "openai/gpt-4o-mini",
+            "openai/gpt-4o",
+            "google/gemini-2.0-flash",
+            "google/gemini-2.0-pro",
+        ]
+
+        filtered = []
+        for m in all_models:
+            mid = m.get("id", "")
+            if any(mid.startswith(p) for p in supported_prefixes):
+                filtered.append({
+                    "id": mid,
+                    "name": m.get("name", mid),
+                    "description": m.get("description", ""),
+                    "context_length": m.get("context_length", 0),
+                    "pricing": {
+                        "prompt": m.get("pricing", {}).get("prompt", "0"),
+                        "completion": m.get("pricing", {}).get("completion", "0"),
+                    },
+                    "provider": mid.split("/")[0] if "/" in mid else "",
+                })
+
+        _models_cache["data"] = filtered
+        _models_cache["fetched_at"] = now
+        return filtered
+
+    except Exception as e:
+        # Fallback to hardcoded if OpenRouter is down
+        return [
+            {"id": "anthropic/claude-sonnet-4", "name": "Claude Sonnet", "description": "", "context_length": 200000, "pricing": {"prompt": "3.0", "completion": "15.0"}, "provider": "anthropic"},
+            {"id": "anthropic/claude-3.5-haiku", "name": "Claude Haiku", "description": "", "context_length": 200000, "pricing": {"prompt": "0.8", "completion": "4.0"}, "provider": "anthropic"},
+            {"id": "openai/gpt-4o", "name": "GPT-4o", "description": "", "context_length": 128000, "pricing": {"prompt": "2.5", "completion": "10.0"}, "provider": "openai"},
+            {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini", "description": "", "context_length": 128000, "pricing": {"prompt": "0.15", "completion": "0.6"}, "provider": "openai"},
+            {"id": "google/gemini-2.0-flash-001", "name": "Gemini Flash", "description": "", "context_length": 1000000, "pricing": {"prompt": "0.1", "completion": "0.4"}, "provider": "google"},
+        ]
 
 # --- Request/Response Models ---
 

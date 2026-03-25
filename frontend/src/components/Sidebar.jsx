@@ -10,7 +10,10 @@ import TagIcon from '@mui/icons-material/Tag'
 import TravelExploreIcon from '@mui/icons-material/TravelExplore'
 import GroupsIcon from '@mui/icons-material/Groups'
 import CloseIcon from '@mui/icons-material/Close'
+import TrainingPanel from './TrainingPanel'
 import { listRooms, createRoom, listModels } from '../api/client'
+import ClinicAgentPanel from './ClinicAgentPanel'
+import ResearchAgentPanel from './ResearchAgentPanel'
 
 const MODEL_LABELS = {
   'anthropic/claude-sonnet-4': 'Claude Sonnet',
@@ -29,6 +32,7 @@ export default function Sidebar({ user, activeRoomId, onSelectRoom, onLogout }) 
   const [newName, setNewName] = useState('')
   const [newModel, setNewModel] = useState('anthropic/claude-sonnet-4')
   const [autoVendrOpen, setAutoVendrOpen] = useState(false)
+  const [activeAgent, setActiveAgent] = useState(null)
 
   const loadRooms = () => listRooms().then(setRooms).catch(console.error)
 
@@ -132,7 +136,7 @@ export default function Sidebar({ user, activeRoomId, onSelectRoom, onLogout }) 
                   border: '1px solid rgba(110, 231, 183, 0.35)',
                 },
               }}
-              onClick={() => { setAutoVendrOpen(false); alert('Research Agent — coming soon') }}
+              onClick={() => { setAutoVendrOpen(false); setActiveAgent('research') }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <TravelExploreIcon sx={{ fontSize: '1.5rem', color: '#6ee7b7' }} />
@@ -158,7 +162,7 @@ export default function Sidebar({ user, activeRoomId, onSelectRoom, onLogout }) 
                   border: '1px solid rgba(129, 140, 248, 0.35)',
                 },
               }}
-              onClick={() => { setAutoVendrOpen(false); alert('Customer Clinic Agent — coming soon') }}
+              onClick={() => { setAutoVendrOpen(false); setActiveAgent('clinic') }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <GroupsIcon sx={{ fontSize: '1.5rem', color: '#818cf8' }} />
@@ -175,6 +179,10 @@ export default function Sidebar({ user, activeRoomId, onSelectRoom, onLogout }) 
           </Box>
         </Box>
       )}
+
+
+      {/* Training Readiness */}
+      <TrainingPanel />
 
       {/* Room List */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -238,6 +246,16 @@ export default function Sidebar({ user, activeRoomId, onSelectRoom, onLogout }) 
           </Button>
         </DialogActions>
       </Dialog>
+      {activeAgent === 'clinic' && (
+        <Box sx={{ position: 'fixed', top: 0, left: 280, right: 0, bottom: 0, bgcolor: '#0a0e17', zIndex: 1200, overflow: 'auto' }}>
+          <ClinicAgentPanel onBack={() => setActiveAgent(null)} />
+        </Box>
+      )}
+      {activeAgent === 'research' && (
+        <Box sx={{ position: 'fixed', top: 0, left: 280, right: 0, bottom: 0, bgcolor: '#0a0e17', zIndex: 1200, overflow: 'auto' }}>
+          <ResearchAgentPanel onBack={() => setActiveAgent(null)} />
+        </Box>
+      )}
     </Box>
   )
 }

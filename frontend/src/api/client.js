@@ -114,3 +114,80 @@ export const linkEntity = (roomId, entity_type, entity_id, name, url = '', attri
 
 // Spend
 export const getSpend = () => request('/spend')
+// Graph Stats & Training Readiness
+export const getGraphStats = () => request('/graph/stats')
+
+export const getTrainingReadiness = () => request('/graph/training-readiness')
+
+// Training
+export const startTraining = () =>
+  request('/graph/train', { method: 'POST' })
+
+export const getTrainingStatus = (jobId) =>
+  request(`/graph/train/${jobId}`)
+
+export const listTrainedModels = () =>
+  request('/graph/models')
+
+// Vendr — Clinic Agent
+export const analyzeClinicFeature = async (imageFile, featureFocus, specificQuestion) => {
+  const formData = new FormData()
+  formData.append('image', imageFile)
+  formData.append('feature_focus', featureFocus)
+  formData.append('specific_question', specificQuestion)
+
+  const headers = {}
+  if (getToken()) headers['Authorization'] = `Bearer ${getToken()}`
+
+  const res = await fetch(`${API_BASE}/vendr/clinic/analyze`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  if (res.status === 401) { setToken(null); window.location.reload(); throw new Error('Unauthorized') }
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed') }
+  return res.json()
+}
+
+export const getPersonas = () => request('/vendr/clinic/personas')
+
+// Vendr — Research Agent
+export const generateResearch = (query, maxPapers = 50) =>
+  request('/vendr/research/generate', {
+    method: 'POST',
+    body: JSON.stringify({ query, max_papers: maxPapers }),
+  })
+
+// Vendr — Podcast Audio
+export const generatePodcastAudio = (transcript, title) =>
+  request('/vendr/research/podcast/generate-audio', {
+    method: 'POST',
+    body: JSON.stringify({ transcript, title }),
+  })
+
+// Vendr — Data Analyst
+export const uploadDataset = async (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const headers = {}
+  if (getToken()) headers['Authorization'] = `Bearer ${getToken()}`
+
+  const res = await fetch(`${API_BASE}/vendr/research/data/upload`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  if (res.status === 401) { setToken(null); window.location.reload(); throw new Error('Unauthorized') }
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed') }
+  return res.json()
+}
+
+export const queryDataset = (dbId, query) =>
+  request('/vendr/research/data/query', {
+    method: 'POST',
+    body: JSON.stringify({ db_id: dbId, query }),
+  })
+
+// Live Models
+export const getLiveModels = () => request('/rooms/models/live')

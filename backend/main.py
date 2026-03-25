@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from routes.training import router as training_router
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -26,6 +27,8 @@ from routes.rooms import router as rooms_router
 from routes.messages import router as messages_router
 from routes.artifacts import router as artifacts_router
 from routes.connectors import router as connectors_router
+from routes.clinic_agent import router as clinic_router
+from routes.research_agent import router as research_router
 
 
 @asynccontextmanager
@@ -119,6 +122,9 @@ app.include_router(rooms_router)
 app.include_router(messages_router)
 app.include_router(artifacts_router)
 app.include_router(connectors_router)
+app.include_router(training_router)
+app.include_router(clinic_router)
+app.include_router(research_router)
 
 
 # --- WebSocket for Real-Time Chat ---

@@ -112,5 +112,28 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id);
             CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id);
             CREATE INDEX IF NOT EXISTS idx_invocations_room ON model_invocations(room_id, created_at);
-        """)
+
+            CREATE TABLE IF NOT EXISTS training_jobs (
+        job_id TEXT PRIMARY KEY,
+        status TEXT NOT NULL DEFAULT 'queued',
+        progress INTEGER NOT NULL DEFAULT 0,
+        message TEXT,
+        model_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        completed_at TEXT,
+        created_by TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS trained_models (
+        model_id TEXT PRIMARY KEY,
+        tinker_model_id TEXT,
+        base_model TEXT NOT NULL,
+        lora_rank INTEGER NOT NULL DEFAULT 32,
+        training_examples INTEGER,
+        final_loss REAL,
+        status TEXT NOT NULL DEFAULT 'training',
+        created_at TEXT NOT NULL,
+        job_id TEXT
+    ); """)
     print("✅ SQLite initialized")

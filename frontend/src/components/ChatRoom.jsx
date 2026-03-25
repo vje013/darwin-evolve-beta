@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   Box, TextField, IconButton, Typography, Chip, Select, MenuItem,
-  CircularProgress, Paper, Tooltip,
+  CircularProgress, Paper, Tooltip, Popover,
 } from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
@@ -12,24 +12,12 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import DescriptionIcon from '@mui/icons-material/Description'
 import BubbleChartIcon from '@mui/icons-material/BubbleChart'
-import { getMessages, sendMessage, getRoom } from '../api/client'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import { getMessages, sendMessage, getRoom, getLiveModels } from '../api/client'
 import useWebSocket from '../hooks/useWebSocket'
 import ConnectorsPanel from './ConnectorsPanel'
 import ArtifactsPanel from './ArtifactsPanel'
 import GraphPanel from './GraphPanel'
-
-const MODEL_SHORT = {
-  'anthropic/claude-sonnet-4': 'Sonnet',
-  'anthropic/claude-3.5-haiku': 'Haiku',
-  'anthropic/claude-3.5-sonnet': 'Sonnet 3.5',
-  'anthropic/claude-3.7-sonnet': 'Sonnet 3.7',
-  'openai/gpt-4o': 'GPT-4o',
-  'openai/gpt-4o-mini': '4o-mini',
-  'google/gemini-2.0-flash-001': 'Flash',
-  'google/gemini-2.0-pro-exp-02-05': 'Gemini Pro',
-}
-
-const ALL_MODELS = Object.keys(MODEL_SHORT)
 
 function stripMarkdown(text) {
   return text
@@ -42,6 +30,34 @@ function stripMarkdown(text) {
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
 }
 
+function formatPrice(priceStr) {
+  const p = parseFloat(priceStr || '0')
+  if (p === 0) return 'Free'
+  const perMillion = p * 1000000
+  if (perMillion < 0.01) return '<$0.01/M'
+  if (perMillion < 1) return `$${perMillion.toFixed(2)}/M`
+  return `$${perMillion.toFixed(1)}/M`
+}
+
+// Global model cache shared across components
+let _modelsCache = null
+let _modelsCachePromise = null
+
+async function fetchModels() {
+  if (_modelsCache) return _modelsCache
+  if (_modelsCachePromise) return _modelsCachePromise
+  _modelsCachePromise = getLiveModels().then(data => {
+    _modelsCache = data
+    return data
+  }).catch(() => {
+    _modelsCache = []
+    return []
+  })
+  return _modelsCachePromise
+}
+
+export { fetchModels }
+
 export default function ChatRoom({ roomId, user }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -50,8 +66,11 @@ export default function ChatRoom({ roomId, user }) {
   const [modelOverride, setModelOverride] = useState('')
   const [aiThinking, setAiThinking] = useState(false)
   const [showPanel, setShowPanel] = useState(false)
-  const [panelView, setPanelView] = useState('connectors') // 'connectors' | 'artifacts' | 'graph'
-  const [mentionAnchor, setMentionAnchor] = useState(null) // {open, filter, cursorPos}
+  const [panelView, setPanelView] = useState('connectors')
+  const [mentionAnchor, setMentionAnchor] = useState(null)
+  const [models, setModels] = useState([])
+  const [infoAnchorEl, setInfoAnchorEl] = useState(null)
+  const [infoModel, setInfoModel] = useState(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -63,6 +82,7 @@ export default function ChatRoom({ roomId, user }) {
   useEffect(() => {
     loadMessages()
     loadRoom()
+    fetchModels().then(setModels)
   }, [roomId])
 
   useEffect(() => {
@@ -133,6 +153,33 @@ export default function ChatRoom({ roomId, user }) {
     }
   }
 
+  const getModelName = (modelId) => {
+    const m = models.find(x => x.id === modelId)
+    if (m) return m.name
+    // Fallback: extract short name from ID
+    const parts = (modelId || '').split('/')
+    return parts.length > 1 ? parts[1] : modelId || 'Model'
+  }
+
+  const getModelShort = (modelId) => {
+    const name = getModelName(modelId)
+    // Shorten common names
+    return name
+      .replace('Claude ', '')
+      .replace('GPT-', 'GPT-')
+      .replace(' (self-moderated)', '')
+      .substring(0, 20)
+  }
+
+  const handleInfoClick = (event, modelId) => {
+    event.stopPropagation()
+    const m = models.find(x => x.id === modelId)
+    if (m) {
+      setInfoModel(m)
+      setInfoAnchorEl(event.currentTarget)
+    }
+  }
+
   const defaultModel = room?.default_model || ''
   const activeModel = modelOverride || defaultModel
   const spend = room?.spend || {}
@@ -182,7 +229,7 @@ export default function ChatRoom({ roomId, user }) {
             )}
             <Chip
               icon={<ModelTrainingIcon sx={{ fontSize: '0.8rem' }} />}
-              label={MODEL_SHORT[activeModel] || 'Model'}
+              label={getModelShort(activeModel)}
               size="small"
               sx={{ fontSize: '0.7rem', bgcolor: 'rgba(129, 140, 248, 0.1)', color: 'secondary.main' }}
             />
@@ -228,7 +275,8 @@ export default function ChatRoom({ roomId, user }) {
           )}
 
           {messages.map((msg) => (
-            <MessageBubble key={msg.message_id} msg={msg} isOwnMessage={msg.author_type === 'human' && msg.author_name === (user.display_name || user.email)} />
+            <MessageBubble key={msg.message_id} msg={msg} models={models}
+              isOwnMessage={msg.author_type === 'human' && msg.author_name === (user.display_name || user.email)} />
           ))}
 
           {(loading || aiThinking) && (
@@ -252,14 +300,25 @@ export default function ChatRoom({ roomId, user }) {
                 value={modelOverride}
                 onChange={(e) => setModelOverride(e.target.value)}
                 sx={{
-                  minWidth: 90, fontSize: '0.7rem', height: 40,
+                  minWidth: 110, fontSize: '0.7rem', height: 40,
                   '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
                 }}
-                renderValue={(v) => v ? MODEL_SHORT[v] : 'Default'}
+                renderValue={(v) => v ? getModelShort(v) : `Default (${getModelShort(defaultModel)})`}
               >
-                <MenuItem value="" sx={{ fontSize: '0.8rem' }}>Default ({MODEL_SHORT[defaultModel]})</MenuItem>
-                {ALL_MODELS.map((m) => (
-                  <MenuItem key={m} value={m} sx={{ fontSize: '0.8rem' }}>{MODEL_SHORT[m]}</MenuItem>
+                <MenuItem value="" sx={{ fontSize: '0.8rem' }}>
+                  Default ({getModelName(defaultModel)})
+                </MenuItem>
+                {models.map((m) => (
+                  <MenuItem key={m.id} value={m.id} sx={{ fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                    <span>{m.name}</span>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => handleInfoClick(e, m.id)}
+                      sx={{ color: 'text.secondary', p: 0.25, ml: 0.5 }}
+                    >
+                      <InfoOutlinedIcon sx={{ fontSize: '0.85rem' }} />
+                    </IconButton>
+                  </MenuItem>
                 ))}
               </Select>
             </Tooltip>
@@ -285,10 +344,9 @@ export default function ChatRoom({ roomId, user }) {
                     bgcolor: '#161b22', border: '1px solid rgba(255,255,255,0.1)',
                     borderRadius: 1.5, zIndex: 10, py: 0.5,
                   }}>
-                    {all.map((person, i) => (
+                    {all.map((person) => (
                       <Box key={person.id}
                         onClick={() => {
-                          // Replace @partial with @Name
                           const before = input.substring(0, mentionAnchor.atPos)
                           const after = input.substring(mentionAnchor.cursorPos)
                           setInput(before + '@' + person.name + ' ' + after)
@@ -301,13 +359,11 @@ export default function ChatRoom({ roomId, user }) {
                           '&:hover': { bgcolor: 'rgba(110, 231, 183, 0.08)' },
                         }}>
                         <SmartToyIcon sx={{
-                          fontSize: '0.9rem',
-                          color: person.type === 'ai' ? '#6ee7b7' : '#818cf8',
+                          fontSize: '0.9rem', color: person.type === 'ai' ? '#6ee7b7' : '#818cf8',
                           display: person.type === 'ai' ? 'block' : 'none',
                         }} />
                         <PersonIcon sx={{
-                          fontSize: '0.9rem',
-                          color: '#818cf8',
+                          fontSize: '0.9rem', color: '#818cf8',
                           display: person.type === 'member' ? 'block' : 'none',
                         }} />
                         <Typography sx={{ fontSize: '0.8rem', fontWeight: person.type === 'ai' ? 600 : 400 }}>
@@ -330,18 +386,13 @@ export default function ChatRoom({ roomId, user }) {
                 onChange={(e) => {
                   const val = e.target.value
                   setInput(val)
-
-                  // Detect @ mentions
                   const cursorPos = e.target.selectionStart || val.length
                   const textBefore = val.substring(0, cursorPos)
                   const atMatch = textBefore.match(/@(\w*)$/)
-
                   if (atMatch) {
                     setMentionAnchor({
-                      open: true,
-                      filter: atMatch[1],
-                      atPos: textBefore.lastIndexOf('@'),
-                      cursorPos,
+                      open: true, filter: atMatch[1],
+                      atPos: textBefore.lastIndexOf('@'), cursorPos,
                     })
                   } else {
                     setMentionAnchor(null)
@@ -389,14 +440,84 @@ export default function ChatRoom({ roomId, user }) {
           )}
         </Box>
       )}
+
+      {/* Model Info Popover */}
+      <Popover
+        open={Boolean(infoAnchorEl)}
+        anchorEl={infoAnchorEl}
+        onClose={() => { setInfoAnchorEl(null); setInfoModel(null) }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        slotProps={{ paper: {
+          sx: { bgcolor: '#161b22', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2, p: 2, maxWidth: 320 }
+        }}}
+      >
+        {infoModel && (
+          <Box>
+            <Typography sx={{ fontFamily: '"JetBrains Mono"', fontSize: '0.85rem', fontWeight: 700, color: '#6ee7b7', mb: 0.5 }}>
+              {infoModel.name}
+            </Typography>
+            <Chip label={infoModel.provider} size="small" sx={{
+              fontSize: '0.55rem', height: 16, mb: 1,
+              bgcolor: 'rgba(129,140,248,0.1)', color: '#818cf8',
+            }} />
+
+            {infoModel.description && (
+              <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', mb: 1.5, lineHeight: 1.5 }}>
+                {infoModel.description.substring(0, 200)}{infoModel.description.length > 200 ? '...' : ''}
+              </Typography>
+            )}
+
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Box>
+                <Typography sx={{ fontSize: '0.55rem', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Context
+                </Typography>
+                <Typography sx={{ fontFamily: '"JetBrains Mono"', fontSize: '0.75rem', fontWeight: 600 }}>
+                  {infoModel.context_length ? `${(infoModel.context_length / 1000).toFixed(0)}K` : '—'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: '0.55rem', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Input
+                </Typography>
+                <Typography sx={{ fontFamily: '"JetBrains Mono"', fontSize: '0.75rem', fontWeight: 600 }}>
+                  {formatPrice(infoModel.pricing?.prompt)}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: '0.55rem', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Output
+                </Typography>
+                <Typography sx={{ fontFamily: '"JetBrains Mono"', fontSize: '0.75rem', fontWeight: 600 }}>
+                  {formatPrice(infoModel.pricing?.completion)}
+                </Typography>
+              </Box>
+            </Box>
+
+            <Typography sx={{ fontSize: '0.5rem', color: 'text.secondary', mt: 1, fontFamily: '"JetBrains Mono"' }}>
+              {infoModel.id}
+            </Typography>
+          </Box>
+        )}
+      </Popover>
     </Box>
   )
 }
 
 
-function MessageBubble({ msg, isOwnMessage }) {
+function MessageBubble({ msg, isOwnMessage, models }) {
   const isAI = msg.author_type === 'ai'
   const isSystem = msg.author_type === 'system'
+
+  const getModelShort = (modelId) => {
+    const m = (models || []).find(x => x.id === modelId)
+    if (m) {
+      return m.name.replace('Claude ', '').replace(' (self-moderated)', '').substring(0, 20)
+    }
+    const parts = (modelId || '').split('/')
+    return parts.length > 1 ? parts[1] : modelId || ''
+  }
 
   if (isSystem) {
     return (
@@ -431,7 +552,7 @@ function MessageBubble({ msg, isOwnMessage }) {
           {msg.author_name || (isAI ? 'Bachman' : 'Unknown')}
         </Typography>
         {msg.model_used && (
-          <Chip label={MODEL_SHORT[msg.model_used] || msg.model_used} size="small"
+          <Chip label={getModelShort(msg.model_used)} size="small"
             sx={{ fontSize: '0.55rem', height: 16, bgcolor: 'rgba(129, 140, 248, 0.1)', color: 'secondary.main' }} />
         )}
         <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary' }}>{timestamp}</Typography>
