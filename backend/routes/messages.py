@@ -248,6 +248,8 @@ async def _generate_ai_response(
     if context_block:
         system += context_block
 
+
+    
     messages = [{"role": "system", "content": system}]
     messages.extend(history)
     messages.append({"role": "user", "content": user_message})

@@ -165,7 +165,10 @@ def run_training(job_id: str, on_progress=None):
 
         # Get model info for manifest
         info = training_client.get_info()
-        model_id = info.model_data.model_id if hasattr(info, 'model_data') else job_id
+        try:
+            model_id = str(info.model_data.model_id) if hasattr(info, 'model_data') and hasattr(info.model_data, 'model_id') else job_id
+        except Exception:
+            model_id = job_id
 
         update("saving", 92, "Saving model manifest...")
 
