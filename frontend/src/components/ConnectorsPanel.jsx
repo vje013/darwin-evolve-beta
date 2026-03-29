@@ -6,6 +6,7 @@ import {
 } from '@mui/material'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import BrushIcon from '@mui/icons-material/Brush'
+import ViewKanbanIcon from '@mui/icons-material/ViewKanban'
 import SyncIcon from '@mui/icons-material/Sync'
 import AddIcon from '@mui/icons-material/Add'
 import LinkIcon from '@mui/icons-material/Link'
@@ -27,12 +28,25 @@ const ENTITY_ICONS = {
   FigmaPage: <BrushIcon sx={{ fontSize: '0.9rem' }} />,
   FigmaFrame: <BrushIcon sx={{ fontSize: '0.9rem' }} />,
   FigmaComponent: <BrushIcon sx={{ fontSize: '0.9rem' }} />,
+  Task: <ViewKanbanIcon sx={{ fontSize: '0.9rem' }} />,
+  Requirement: <AccountTreeIcon sx={{ fontSize: '0.9rem' }} />,
+  Person: <LinkIcon sx={{ fontSize: '0.9rem' }} />,
+  Decision: <LinkIcon sx={{ fontSize: '0.9rem' }} />,
+  Component: <BrushIcon sx={{ fontSize: '0.9rem' }} />,
+  System: <CodeIcon sx={{ fontSize: '0.9rem' }} />,
 }
 
 const SOURCE_COLORS = {
   github: '#238636',
   figma: '#a259ff',
+  trello: '#0079bf',
   chat_extraction: 'rgba(110, 231, 183, 0.3)',
+}
+
+const CONNECTOR_ICONS = {
+  github: <GitHubIcon sx={{ fontSize: '0.8rem' }} />,
+  figma: <BrushIcon sx={{ fontSize: '0.8rem' }} />,
+  trello: <ViewKanbanIcon sx={{ fontSize: '0.8rem' }} />,
 }
 
 export default function ConnectorsPanel({ roomId }) {
@@ -44,6 +58,8 @@ export default function ConnectorsPanel({ roomId }) {
   const [githubToken, setGithubToken] = useState('')
   const [figmaFileKey, setFigmaFileKey] = useState('')
   const [figmaToken, setFigmaToken] = useState('')
+  const [trelloBoardId, setTrelloBoardId] = useState('')
+  const [trelloToken, setTrelloToken] = useState('')
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
@@ -76,6 +92,9 @@ export default function ConnectorsPanel({ roomId }) {
       } else if (connectorType === 'figma') {
         if (!figmaFileKey || !figmaToken) { setError('File key and token required'); setLoading(false); return }
         config = { file_key: figmaFileKey, token: figmaToken }
+      } else if (connectorType === 'trello') {
+        if (!trelloBoardId || !trelloToken) { setError('Board ID and token required'); setLoading(false); return }
+        config = { board_id: trelloBoardId, token: trelloToken }
       }
 
       const result = await addConnector(roomId, connectorType, config)
@@ -85,6 +104,8 @@ export default function ConnectorsPanel({ roomId }) {
       setGithubToken('')
       setFigmaFileKey('')
       setFigmaToken('')
+      setTrelloBoardId('')
+      setTrelloToken('')
       load()
     } catch (err) {
       setError(err.message)
@@ -136,6 +157,15 @@ export default function ConnectorsPanel({ roomId }) {
 
   const sources = [...new Set(entities.map(e => e.source).filter(Boolean))]
 
+  const formatSyncResult = (result) => {
+    if (result.error) return result.error
+    if (result.stats) {
+      const s = result.stats
+      return `Synced: ${s.cards || 0} cards, ${s.checklist_items || 0} checklist items, ${s.members || 0} members, ${s.labels || 0} labels, ${s.comments || 0} comments, ${s.attachments || 0} attachments`
+    }
+    return `Synced: ${result.branches || 0} branches, ${result.pull_requests || 0} PRs, ${result.issues || 0} issues, ${result.commits || 0} commits, ${result.files || 0} files, ${result.pages || 0} pages, ${result.frames || 0} frames`
+  }
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
@@ -169,7 +199,7 @@ export default function ConnectorsPanel({ roomId }) {
             {connectors.map(c => (
               <Chip
                 key={c.connector_id}
-                icon={c.connector_type === 'github' ? <GitHubIcon sx={{ fontSize: '0.8rem' }} /> : <BrushIcon sx={{ fontSize: '0.8rem' }} />}
+                icon={CONNECTOR_ICONS[c.connector_type] || <LinkIcon sx={{ fontSize: '0.8rem' }} />}
                 label={c.connector_type}
                 size="small"
                 onClick={() => handleSync(c.connector_id)}
@@ -198,10 +228,7 @@ export default function ConnectorsPanel({ roomId }) {
             onClose={() => setSyncResult(null)}
             sx={{ fontSize: '0.7rem', py: 0 }}
           >
-            {syncResult.error
-              ? syncResult.error
-              : `Synced: ${syncResult.branches || 0} branches, ${syncResult.pull_requests || 0} PRs, ${syncResult.issues || 0} issues, ${syncResult.commits || 0} commits, ${syncResult.files || 0} files, ${syncResult.pages || 0} pages, ${syncResult.frames || 0} frames`
-            }
+            {formatSyncResult(syncResult)}
           </Alert>
         </Box>
       )}
@@ -234,7 +261,7 @@ export default function ConnectorsPanel({ roomId }) {
             <LinkIcon sx={{ fontSize: '2rem', mb: 1, opacity: 0.3 }} />
             <Typography sx={{ fontSize: '0.8rem' }}>
               {connectors.length === 0
-                ? 'Connect GitHub or Figma to pull entities into the graph.'
+                ? 'Connect GitHub, Figma, or Trello to pull entities into the graph.'
                 : 'No entities synced yet. Try syncing your connectors.'
               }
             </Typography>
@@ -277,6 +304,11 @@ export default function ConnectorsPanel({ roomId }) {
                   <BrushIcon sx={{ fontSize: '1rem' }} /> Figma
                 </Box>
               </MenuItem>
+              <MenuItem value="trello">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ViewKanbanIcon sx={{ fontSize: '1rem' }} /> Trello
+                </Box>
+              </MenuItem>
             </Select>
           </FormControl>
 
@@ -311,6 +343,24 @@ export default function ConnectorsPanel({ roomId }) {
                 placeholder="figd_..."
                 value={figmaToken} onChange={(e) => setFigmaToken(e.target.value)}
                 helperText="figma.com → Settings → Personal Access Tokens"
+              />
+            </>
+          )}
+
+          {connectorType === 'trello' && (
+            <>
+              <TextField
+                fullWidth size="small" label="Board ID"
+                placeholder="xaezXoD8"
+                value={trelloBoardId} onChange={(e) => setTrelloBoardId(e.target.value)}
+                helperText="From the Trello URL: trello.com/b/[BOARD_ID]/..."
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth size="small" label="API Token" type="password"
+                placeholder="ATTA..."
+                value={trelloToken} onChange={(e) => setTrelloToken(e.target.value)}
+                helperText="trello.com/app-key → authorize to get token"
               />
             </>
           )}

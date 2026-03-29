@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from auth import get_current_user, check_room_access
 from db import get_db
+from services.trello_connector import sync_trello_board
 from services.graph import merge_entity, link_entity_to_room, create_relationship, get_driver
 from services.audit import audit
 from services.github_connector import sync_github_repo
@@ -42,8 +43,8 @@ class LinkEntityRequest(BaseModel):
 async def link_connector(room_id: str, req: LinkConnectorRequest, user: dict = Depends(get_current_user)):
     check_room_access(user["user_id"], room_id, "admin")
 
-    if req.connector_type not in ("github", "figma"):
-        raise HTTPException(400, "Connector type must be: github or figma")
+    if req.connector_type not in ("github", "figma", "trello"):
+        raise HTTPException(400, "Connector type must be: github, figma, or trello")
 
     # Validate config
     if req.connector_type == "github":
@@ -52,6 +53,11 @@ async def link_connector(room_id: str, req: LinkConnectorRequest, user: dict = D
     elif req.connector_type == "figma":
         if "file_key" not in req.config or "token" not in req.config:
             raise HTTPException(400, "Figma connector requires 'file_key' and 'token' fields")
+    elif req.connector_type == "trello":
+        if "board_id" not in req.config or "token" not in req.config:
+            raise HTTPException(400, "Trello connector requires 'board_id' and 'token' fields")
+        if "api_key" not in req.config:
+            req.config["api_key"] = "0c72fa43801765331b7a5c9818336ec7"
 
     connector_id = str(uuid.uuid4())
 
@@ -146,6 +152,14 @@ async def _sync_connector(connector_id: str, room_id: str, connector_type: str, 
                 token=config["token"],
                 user_id=user_id,
             )
+        elif connector_type == "trello":
+            result = await sync_trello_board(
+                room_id=room_id,
+                board_id=config["board_id"],
+                api_key=config.get("api_key", "0c72fa43801765331b7a5c9818336ec7"),
+                token=config["token"],
+                user_id=user_id,
+    )
         else:
             return {"error": f"Unknown connector type: {connector_type}"}
 

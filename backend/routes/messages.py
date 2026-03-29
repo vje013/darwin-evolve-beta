@@ -19,10 +19,8 @@ from services.ws_manager import manager
 
 router = APIRouter(prefix="/rooms/{room_id}/messages", tags=["messages"])
 
-# Pattern to detect @bachman mentions
 BACHMAN_MENTION = re.compile(r"@bachman\b", re.IGNORECASE)
 
-# System prompt for the AI participant
 AI_SYSTEM_PROMPT = """You are a collaborative AI participant in a team chat room for Darwin Enterprise Evolve.
 You are embedded in the conversation as a teammate, not as an external tool.
 
@@ -61,8 +59,6 @@ class MessageOut(BaseModel):
 
     model_config = {"protected_namespaces": ()}
 
-
-# --- Message Endpoints ---
 
 @router.get("")
 async def get_messages(
@@ -120,7 +116,6 @@ async def send_message(
     message_id = str(uuid.uuid4())
     created_at = None
 
-    # Store human message
     with get_db() as conn:
         conn.execute(
             """INSERT INTO messages (message_id, room_id, author_id, author_type, content, thread_id)
@@ -132,7 +127,6 @@ async def send_message(
 
     audit(user_id, "message_sent", room_id, "message", message_id)
 
-    # Build the human message payload
     human_msg = {
         "type": "message",
         "message_id": message_id,
@@ -146,7 +140,6 @@ async def send_message(
         "created_at": created_at,
     }
 
-    # Broadcast human message to OTHER users in the room
     await manager.broadcast_to_room(room_id, human_msg, exclude_user_id=user_id)
 
     response_data = {
@@ -154,7 +147,6 @@ async def send_message(
         "ai_response": None,
     }
 
-    # Check for @bachman mention
     if BACHMAN_MENTION.search(req.content):
         await manager.broadcast_to_room(room_id, {
             "type": "ai_thinking",
@@ -170,7 +162,6 @@ async def send_message(
         )
         response_data["ai_response"] = ai_response
 
-        # Broadcast AI response to OTHER users
         ai_msg = {
             "type": "message",
             "message_id": ai_response["message_id"],
@@ -248,18 +239,43 @@ async def _generate_ai_response(
     if context_block:
         system += context_block
 
-
-    
     messages = [{"role": "system", "content": system}]
     messages.extend(history)
     messages.append({"role": "user", "content": user_message})
 
-    llm_result = await call_llm(
-        messages=messages,
-        room_id=room_id,
-        user_id=user_id,
-        model=model_override,
-    )
+    # Check if custom trained model is requested
+    if model_override == "custom/trained":
+        from services.tinker_inference import has_trained_model, get_active_model, sample_from_trained_model
+        if has_trained_model():
+            active = get_active_model()
+            custom_result = sample_from_trained_model(
+                model_id=active["model_id"],
+                user_message=user_message,
+                conversation_history=history[-6:],
+                graph_context=context_block,
+            )
+            llm_result = {
+                "content": custom_result["content"],
+                "model": custom_result["model"],
+                "tokens_in": 0,
+                "tokens_out": custom_result.get("tokens_out", 0),
+                "cost": 0.0,
+                "invocation_id": str(uuid.uuid4()),
+            }
+        else:
+            llm_result = await call_llm(
+                messages=messages,
+                room_id=room_id,
+                user_id=user_id,
+                model=None,
+            )
+    else:
+        llm_result = await call_llm(
+            messages=messages,
+            room_id=room_id,
+            user_id=user_id,
+            model=model_override,
+        )
 
     ai_message_id = str(uuid.uuid4())
     with get_db() as conn:
