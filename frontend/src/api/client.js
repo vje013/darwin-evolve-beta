@@ -1,4 +1,4 @@
-const API_BASE = '/api'
+const API_BASE = window.location.hostname === 'localhost' ? '/api' : 'https://darwin-evolve-450665779990.us-central1.run.app'
 
 let token = localStorage.getItem('darwin_token')
 

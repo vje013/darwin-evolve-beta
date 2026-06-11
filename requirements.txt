@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+neo4j
+python-jose[cryptography]
+bcrypt
+passlib[bcrypt]
+httpx
+pillow
+anthropic
+arxiv
+sqlalchemy
+pandas
+google-generativeai
+pydantic
+python-multipart
