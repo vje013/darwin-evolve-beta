@@ -114,6 +114,7 @@ export const linkEntity = (roomId, entity_type, entity_id, name, url = '', attri
 
 // Spend
 export const getSpend = () => request('/spend')
+
 // Graph Stats & Training Readiness
 export const getGraphStats = () => request('/graph/stats')
 
@@ -129,7 +130,7 @@ export const getTrainingStatus = (jobId) =>
 export const listTrainedModels = () =>
   request('/graph/models')
 
-// Vendr — Clinic Agent
+// Vendr — Clinic Agent (Quick Analysis)
 export const analyzeClinicFeature = async (imageFile, featureFocus, specificQuestion) => {
   const formData = new FormData()
   formData.append('image', imageFile)
@@ -140,6 +141,27 @@ export const analyzeClinicFeature = async (imageFile, featureFocus, specificQues
   if (getToken()) headers['Authorization'] = `Bearer ${getToken()}`
 
   const res = await fetch(`${API_BASE}/vendr/clinic/analyze`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  if (res.status === 401) { setToken(null); window.location.reload(); throw new Error('Unauthorized') }
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed') }
+  return res.json()
+}
+
+// Vendr — Clinic Agent (Full Protocol: Cosmos + 14-Step)
+export const runClinicProtocol = async (imageFile, featureFocus, specificQuestion, personas = '') => {
+  const formData = new FormData()
+  formData.append('image', imageFile)
+  formData.append('feature_focus', featureFocus)
+  formData.append('specific_question', specificQuestion)
+  formData.append('personas', personas)
+
+  const headers = {}
+  if (getToken()) headers['Authorization'] = `Bearer ${getToken()}`
+
+  const res = await fetch(`${API_BASE}/vendr/clinic/protocol`, {
     method: 'POST',
     headers,
     body: formData,
@@ -187,6 +209,13 @@ export const queryDataset = (dbId, query) =>
   request('/vendr/research/data/query', {
     method: 'POST',
     body: JSON.stringify({ db_id: dbId, query }),
+  })
+
+// Vendr — ADK Agent
+export const runAgentQuery = (query, history = []) =>
+  request('/vendr/research/agent/query', {
+    method: 'POST',
+    body: JSON.stringify({ query, history }),
   })
 
 // Live Models
