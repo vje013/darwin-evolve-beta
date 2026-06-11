@@ -108,3 +108,21 @@ async def query_dataset_endpoint(
         raise HTTPException(400, result["error"])
 
     return result
+
+class AgentQueryRequest(BaseModel):
+    query: str
+    history: list = []
+
+
+@router.post("/agent/query")
+async def run_agent(
+    req: AgentQueryRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Run the ADK agent with Gemini + MongoDB Atlas tools."""
+    from services.adk_agent import run_adk_agent
+    try:
+        result = await run_adk_agent(req.query, req.history)
+        return result
+    except Exception as e:
+        raise HTTPException(500, f"Agent error: {str(e)}")
