@@ -232,12 +232,6 @@ This isn't a prototype. The founder ran a version of this at Subaru for over a y
 
 ---
 
-## Team
-
-**Vladimir Edouard** — CEO, Darwin Adaptive Systems LLC. R&D Software Engineer at Subaru (HMI Advanced Technology team). Built Enterprise Evolve because his team needed it.
-
----
-
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
