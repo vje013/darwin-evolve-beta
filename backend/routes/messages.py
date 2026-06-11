@@ -235,6 +235,24 @@ async def _generate_ai_response(
             if content:
                 context_block += f"\n### [{branch}] {path}\n```\n{content}\n```\n"
 
+
+    # Add MongoDB semantic context
+    try:
+        from services.mongo_store import search_all_collections
+        mongo_context = search_all_collections(user_message, limit=3)
+        if any(mongo_context.values()):
+            context_block += "\n\n--- CUSTOMER CLINIC HISTORY (from Atlas Vector Search) ---\n"
+            for collection, results_list in mongo_context.items():
+                for r in results_list:
+                    if r.get("feature_focus"):
+                        context_block += f"- Clinic: {r['feature_focus']} — {r.get('specific_question', '')} (satisfaction: {r.get('avg_satisfaction', 'N/A')})\n"
+                    elif r.get("decision"):
+                        context_block += f"- Decision: {r.get('feature', '')} — {r['decision']}\n"
+                    elif r.get("name"):
+                        context_block += f"- Spec: {r['name']} — {r.get('description', '')}\n"
+    except Exception as e:
+        print(f"MongoDB context error: {e}")
+
     system = AI_SYSTEM_PROMPT
     if context_block:
         system += context_block

@@ -1,6 +1,7 @@
 """
 Darwin Enterprise Evolve Beta — Clinic Agent Routes
 POST image + feature + question → full 20-persona CID analysis.
+Auto-stores results in MongoDB Atlas with vector embeddings.
 """
 import base64
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -13,7 +14,6 @@ router = APIRouter(prefix="/vendr/clinic", tags=["vendr"])
 
 @router.get("/personas")
 async def list_personas(user: dict = Depends(get_current_user)):
-    """List all available customer personas."""
     return [p.to_dict() for p in CUSTOMERS]
 
 
@@ -24,10 +24,6 @@ async def analyze_feature(
     specific_question: str = Form(...),
     user: dict = Depends(get_current_user),
 ):
-    """
-    Run CID analysis across all 20 personas.
-    Accepts multipart form with image file + text fields.
-    """
     if not image.content_type or not image.content_type.startswith("image/"):
         raise HTTPException(400, "Please upload an image file")
 
@@ -37,6 +33,14 @@ async def analyze_feature(
 
     try:
         results = run_full_clinic(image_bytes, feature_focus, specific_question)
+
+        # Auto-store in MongoDB Atlas with vector embedding
+        try:
+            from services.mongo_store import store_clinic_session
+            store_clinic_session(results)
+        except Exception as e:
+            print(f"MongoDB store error: {e}")
+
         return results
     except Exception as e:
         raise HTTPException(500, f"Analysis failed: {str(e)}")

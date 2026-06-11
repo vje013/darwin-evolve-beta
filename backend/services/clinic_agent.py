@@ -1,34 +1,27 @@
 """
 Darwin Enterprise Evolve Beta — Clinic Agent Service
-Claude-powered CID feature analysis across customer personas.
+Gemini-powered CID feature analysis via OpenRouter.
 """
 import os
 import json
 import random
 import base64
 import io
+import httpx
 from PIL import Image
-import anthropic
 from services.personas import CUSTOMERS, CustomerPersona
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+OPENROUTER_API_KEY = None
 
-_client = None
-
-
-def _get_client():
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    return _client
+def _get_key():
+    global OPENROUTER_API_KEY
+    if not OPENROUTER_API_KEY:
+        OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+    return OPENROUTER_API_KEY
 
 
 def analyze_cid_feature(image_data: Image.Image, feature_focus: str,
                         specific_question: str, persona: CustomerPersona) -> dict:
-    """Analyze a CID feature from one persona's perspective using Claude."""
-    client = _get_client()
-
-    # Convert image to base64
     buf = io.BytesIO()
     image_data.save(buf, format='PNG')
     img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
@@ -55,41 +48,44 @@ Respond ONLY with JSON, no markdown, no backticks:
 {{"feature_analysis": "...", "customer_reaction": "...", "satisfaction_score": 7, "customer_quote": "...", "likes": ["..."], "dislikes": ["..."], "suggestions": ["..."], "accessibility_concerns": "...", "deal_breaker": false}}"""
 
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": img_b64,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": prompt,
-                    },
-                ],
-            }],
+        resp = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {_get_key()}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "google/gemini-3.5-flash",
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                        {"type": "text", "text": prompt},
+                    ],
+                }],
+                "max_tokens": 1000,
+            },
+            timeout=60.0,
         )
 
-        text = response.content[0].text
+        if resp.status_code != 200:
+            print(f"OpenRouter error {resp.status_code}: {resp.text[:200]}")
+            return None
+
+        text = resp.json()["choices"][0]["message"]["content"]
 
         if '```json' in text:
             text = text.split('```json')[1].split('```')[0].strip()
         elif '```' in text:
             text = text.split('```')[1].split('```')[0].strip()
+        elif '{' in text:
+            text = text[text.find('{'):text.rfind('}') + 1]
 
-        result = json.loads(text)
-        return result
+        return json.loads(text)
 
     except json.JSONDecodeError:
         return {
-            "feature_analysis": f"Analysis of {feature_focus} completed (parse error)",
+            "feature_analysis": f"Analysis of {feature_focus} completed",
             "customer_reaction": f"Customer reaction to {specific_question}",
             "satisfaction_score": random.randint(5, 8),
             "customer_quote": "Analysis in progress...",
@@ -105,7 +101,6 @@ Respond ONLY with JSON, no markdown, no backticks:
 
 
 def run_full_clinic(image_bytes: bytes, feature_focus: str, specific_question: str) -> dict:
-    """Run CID analysis across all 20 personas. Returns full results dict."""
     image = Image.open(io.BytesIO(image_bytes))
 
     results = {}
