@@ -19,9 +19,17 @@ Then they wait 3 months for a $250K in-person customer clinic to find out their 
 
 Enterprise Evolve replaces quarterly customer clinics with continuous AI-powered design validation. Upload a CID image, get physics-grounded feedback from 20 simulated customer personas through a structured 14-step usability protocol — in minutes, not months. Every session is stored in MongoDB Atlas with vector embeddings, so the AI gets smarter with every session.
 
-## Demo Video
+## Demo 
 
-[Watch the 3-minute demo →](YOUR_YOUTUBE_LINK_HERE)
+[Watch the 3-minute demo ](https://www.youtube.com/watch?v=v9AYGOhHWs0)
+
+Go to https://darwin-evolve-frontend-383800869695.us-central1.run.app now and create an account. Use:
+
+Email: demo@darwin.ai
+
+Display Name: Vlad
+
+Password: hackathon2026
 
 ## Live Deployment
 
