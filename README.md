@@ -260,7 +260,7 @@ Open `http://localhost:3000`
 
 ## Impact
 
-- Subaru spends $1M/year on HMI customer clinics. Enterprise Evolve replaces that with physics-grounded AI analysis at $0.50 per session.
+- Automotive companies like Ford, Tesla, etc spend at least $1M/year on HMI customer clinics. Enterprise Evolve replaces that with physics-grounded AI analysis at $0.50 per session.
 - 40+ automotive OEMs in America run similar programs.
 - Chinese, Korean, and Vietnamese OEMs entering the US market have zero customer intelligence infrastructure. Enterprise Evolve is the American consumer intelligence layer.
 - TAM extends beyond automotive to any screen-based product team needing continuous customer validation.
@@ -273,7 +273,7 @@ Every other submission uses MongoDB as a document store with vector search bolte
 
 Every other submission uses an LLM to guess about the physical world. Enterprise Evolve uses **NVIDIA Cosmos Reason 2B** — a physics-native vision model — to ground every persona response in measured ergonomic constraints. The personas don't hallucinate about button sizes. They react to ISO-referenced physical measurements.
 
-This isn't a prototype. The founder ran a version of this at Subaru for over a year on production HMI decisions.
+This isn't a random wrapper. The developer works for an automotive HMI team and understands this problem deeply.
 
 ---
 
@@ -281,7 +281,7 @@ This isn't a prototype. The founder ran a version of this at Subaru for over a y
 
 **Vladimir Edouard** — CEO, Darwin Adaptive Systems LLC. R&D Software Engineer at Subaru (HMI Advanced Technology team). Built Enterprise Evolve because his team needed it.
 
-**Brandon Chen** — COO, Darwin Adaptive Systems LLC.
+**Brandon Chen** — COO, Darwin Adaptive Systems LLC. Researcher, UNC Chapel Hill, Institute of Risk Management and Insurance Innovation.
 
 ---
 
